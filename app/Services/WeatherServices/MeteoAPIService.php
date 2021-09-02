@@ -2,6 +2,7 @@
 
 namespace App\Services\WeatherServices;
 
+use App\Services\WeatherInfo;
 use DateInterval;
 use Exception;
 use GuzzleHttp\Client;

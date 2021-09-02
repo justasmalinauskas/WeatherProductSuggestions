@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Products;
+use App\Models\WeatherTypes;
+use App\Services\WeatherInfo;
 use App\Services\WeatherServices\MeteoAPIService;
 use GuzzleHttp\Exception\GuzzleException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -17,7 +19,7 @@ class ProductController extends Controller
 
     public function show($sku)
     {
-       // dd(Products::find($id)::with('weatherTypes')->first());
+        // dd(Products::find($id)::with('weatherTypes')->first());
         //return Products::where('sku', '=', $sku)->with('weatherTypes')->firstOrFail();
         try {
             return Products::where('sku', '=', $sku)->with('weatherTypes')->firstOrFail();
@@ -56,14 +58,30 @@ class ProductController extends Controller
 
     }
 
-    public function getRecommended(Request $request, $city) {
+    public function getRecommended(Request $request, $city)
+    {
         $api = new MeteoAPIService();
         try {
-            $data = $api->GetForecastData($city);
-            return response()->json($data, 200, [
+            $data = WeatherInfo::FetchWeatherData($city, $api);
+            $response = [];
+            $response['city'] = $data->getPlace();
+            $response['recomendations'] = [];
+            foreach ($data->getWeatherData() as $weatherData) {
+                $weather = $weatherData->getWeather();
+                $weatherType = WeatherTypes::where('type', '=', $weather)->firstOrFail();
+                $relatedProducts = Products::whereHas('weatherTypes', function ($query) use ($weatherType) {
+                    return $query->where('weather_type', '=', $weatherType->id);
+                })->inRandomOrder()->take(2)->get()->toArray();
+                $response['recomendations'][] = [
+                    "weather_forecast" => $weatherType->type,
+                    "date" => $weatherData->getDate()->format("Y-m-d"),
+                    "products" => $relatedProducts
+                ];
+            }
+            return response()->json($response, 200, [
                 'X-APIProviderLegal' => $api->DataOwner,
             ]);
-        } catch (GuzzleException | \Exception $e) {
+        } catch (\Exception $e) {
             $data = [
                 "error" => "Failed to fetch data from weather API provider"
             ];
