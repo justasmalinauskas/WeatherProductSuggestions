@@ -9,6 +9,9 @@ use App\Services\WeatherServices\MeteoAPIService;
 use GuzzleHttp\Exception\GuzzleException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 
 class ProductController extends Controller
 {
@@ -19,12 +22,10 @@ class ProductController extends Controller
 
     public function show($sku)
     {
-        // dd(Products::find($id)::with('weatherTypes')->first());
-        //return Products::where('sku', '=', $sku)->with('weatherTypes')->firstOrFail();
         try {
             return Products::where('sku', '=', $sku)->with('weatherTypes')->firstOrFail();
         } catch (ModelNotFoundException $e) {
-            return ['error' => "Product does not exist"];
+            return response()->json(['error' => "Product does not exist"], 404);
         }
     }
 
@@ -41,7 +42,7 @@ class ProductController extends Controller
             $product->update($request->all());
             return $product;
         } catch (ModelNotFoundException $e) {
-            return ['error' => "Product does not exist"];
+            return response()->json(['error' => "Product does not exist"], 404);
         }
 
     }
@@ -51,17 +52,27 @@ class ProductController extends Controller
         try {
             $product = Products::where('sku', '=', $sku)->firstOrFail();
             $product->delete();
-            return 204;
+            return response()->json($product, 204);
         } catch (ModelNotFoundException $e) {
-            return ['error' => "Product does not exist"];
+            return response()->json(['error' => "Product does not exist"], 404);
         }
 
     }
 
     public function getRecommended(Request $request, $city)
     {
-        $api = new MeteoAPIService();
         try {
+            $validator = Validator::make(
+                ["city" => $city]
+                ,
+                [
+                'city' => ['required'],
+                ]
+            );
+            if ($validator->fails()) {
+                throw ValidationException::withMessages($validator->errors()->toArray());
+            }
+            $api = new MeteoAPIService();
             $data = WeatherInfo::FetchWeatherData($city, $api);
             $response = [];
             $response['city'] = $data->getPlace();
@@ -82,10 +93,20 @@ class ProductController extends Controller
                 'X-APIProviderLegal' => $api->DataOwner,
             ]);
         } catch (\Exception $e) {
+            $status = 500;
             $data = [
                 "error" => "Failed to fetch data from weather API provider"
             ];
-            return response()->json($data, 500, [
+            Log::error($e->getMessage(), $e->getTrace());
+            if ($e instanceof GuzzleException) {
+                $status = $e->getCode();
+            }
+            if($status === 404) {
+                $data = [
+                    "error" => "Not Found data for place: ". $city
+                ];
+            }
+            return response()->json($data, $status, [
                 'X-APIProviderLegal' => $api->DataOwner,
             ]);
         }

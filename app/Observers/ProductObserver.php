@@ -5,6 +5,7 @@ namespace App\Observers;
 use App\Models\Products;
 use App\Rules\ValidSKU;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class ProductObserver
@@ -66,9 +67,15 @@ class ProductObserver
 
     public function saving(Products $product)
     {
-
+        $object = Products::find($product->id);
+        $id = $object->id ?? null;
         $validator = Validator::make($product->toArray(), [ //inputs are not empty or null
-            'sku' => ['required', 'unique:products', new ValidSKU()],
+            'sku' => [
+                'required',
+                new ValidSKU(),
+                Rule::unique('products')->ignore($id)
+
+            ],
             'name' => 'required',
             'price' => 'required',
         ]);

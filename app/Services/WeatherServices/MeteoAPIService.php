@@ -22,6 +22,7 @@ class MeteoAPIService extends AbstractWeatherAPI implements WeatherAPIInterface
         $this->client = new Client([
             'base_uri' => $this->apiURL,
             'timeout'  => 30.0,
+            'verify' => base_path('cacert.pem'),
         ]);
 
     }
