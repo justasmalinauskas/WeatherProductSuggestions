@@ -7,6 +7,7 @@ use DateInterval;
 use Exception;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
+use Illuminate\Support\Facades\Log;
 
 class MeteoAPIService extends AbstractWeatherAPI implements WeatherAPIInterface
 {
@@ -52,7 +53,7 @@ class MeteoAPIService extends AbstractWeatherAPI implements WeatherAPIInterface
         $dateIn3Days->setTime(0, 0);
         $dateIn3Days->add(new DateInterval('P3D'));
 
-        $conversionTable = config('weather_data.WEATHER_TYPE') ?? [];
+
         $storedForecasts = [];
         foreach ($parsed->forecastTimestamps as $forecastTimestamp) {
             $date = \DateTime::createFromFormat($format, $forecastTimestamp->forecastTimeUtc);
@@ -66,8 +67,7 @@ class MeteoAPIService extends AbstractWeatherAPI implements WeatherAPIInterface
                         "weatherData" => []
                     ];
                 }
-                $storedForecasts[$dateYmd]["weatherData"][] =
-                    $conversionTable[strtolower(trim($forecastTimestamp->conditionCode))];
+                $storedForecasts[$dateYmd]["weatherData"][] = $this->parseWeatherData($forecastTimestamp->conditionCode);
             }
         }
         $returnForecasts = [];
@@ -75,6 +75,7 @@ class MeteoAPIService extends AbstractWeatherAPI implements WeatherAPIInterface
             $counts = array_count_values($storedForecast['weatherData']);
             arsort($counts);
             $mode = key($counts);
+            Log::debug(json_encode($counts));
             $returnForecasts[] = new WeatherDataObject($storedForecast['date'], $mode);
         }
         return new WeatherResponseObject($returnForecasts, $parsed->place->name);
